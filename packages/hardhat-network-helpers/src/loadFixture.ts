@@ -6,16 +6,16 @@ import {
   InvalidSnapshotError,
 } from "./errors";
 
-type Fixture<T> = (...args: any[]) => Promise<T>;
+type Fixture<T, Args extends any[] = any[]> = (...args: Args) => Promise<T>;
 
-interface Snapshot<T> {
+interface Snapshot<T, Args extends any[] = any[]> {
   restorer: SnapshotRestorer;
-  fixture: Fixture<T>;
-  args: any[];
+  fixture: Fixture<T, Args>;
+  args: Args;
   data: T;
 }
 
-let snapshots: Array<Snapshot<any>> = [];
+let snapshots: Array<Snapshot<any, any[]>> = [];
 
 /**
  * Useful in tests for setting up the desired state of the network.
@@ -31,9 +31,9 @@ let snapshots: Array<Snapshot<any>> = [];
  * - Correct usage: `loadFixture(deployTokens)` or `loadFixture(deployTokens, [arg1, arg2])`
  * - Incorrect usage: `loadFixture(async () => { ... })`
  */
-export async function loadFixture<T>(
-  fixture: Fixture<T>,
-  args: any[] = []
+export async function loadFixture<T, Args extends any[]>(
+  fixture: Fixture<T, Args>,
+  args: Args = [] as unknown as Args
 ): Promise<T> {
   if (fixture.name === "") {
     throw new FixtureAnonymousFunctionError();
@@ -63,12 +63,12 @@ export async function loadFixture<T>(
 
     return snapshot.data;
   } else {
-    const data = args.length > 0 ? await fixture(...args) : await fixture();
+    const data = await fixture(...args);
     const restorer = await takeSnapshot();
 
     snapshots.push({
       restorer,
-      fixture,
+      fixture: fixture as Fixture<any, any[]>,
       args,
       data,
     });
