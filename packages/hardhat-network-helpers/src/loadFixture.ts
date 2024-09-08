@@ -6,11 +6,12 @@ import {
   InvalidSnapshotError,
 } from "./errors";
 
-type Fixture<T> = () => Promise<T>;
+type Fixture<T> = (...args: any[]) => Promise<T>;
 
 interface Snapshot<T> {
   restorer: SnapshotRestorer;
   fixture: Fixture<T>;
+  args: any[];
   data: T;
 }
 
@@ -20,22 +21,28 @@ let snapshots: Array<Snapshot<any>> = [];
  * Useful in tests for setting up the desired state of the network.
  *
  * Executes the given function and takes a snapshot of the blockchain. Upon
- * subsequent calls to `loadFixture` with the same function, rather than
- * executing the function again, the blockchain will be restored to that
+ * subsequent calls to `loadFixture` with the same function and arguments,
+ * rather than executing the function again, the blockchain will be restored to that
  * snapshot.
  *
  * _Warning_: don't use `loadFixture` with an anonymous function, otherwise the
  * function will be executed each time instead of using snapshots:
  *
- * - Correct usage: `loadFixture(deployTokens)`
+ * - Correct usage: `loadFixture(deployTokens)` or `loadFixture(deployTokens, [arg1, arg2])`
  * - Incorrect usage: `loadFixture(async () => { ... })`
  */
-export async function loadFixture<T>(fixture: Fixture<T>): Promise<T> {
+export async function loadFixture<T>(
+  fixture: Fixture<T>,
+  args: any[] = []
+): Promise<T> {
   if (fixture.name === "") {
     throw new FixtureAnonymousFunctionError();
   }
 
-  const snapshot = snapshots.find((s) => s.fixture === fixture);
+  const cacheKey = JSON.stringify([fixture.name, args]);
+  const snapshot = snapshots.find(
+    (s) => JSON.stringify([s.fixture.name, s.args]) === cacheKey
+  );
 
   const { takeSnapshot } = await import("./helpers/takeSnapshot");
 
@@ -56,12 +63,13 @@ export async function loadFixture<T>(fixture: Fixture<T>): Promise<T> {
 
     return snapshot.data;
   } else {
-    const data = await fixture();
+    const data = args.length > 0 ? await fixture(...args) : await fixture();
     const restorer = await takeSnapshot();
 
     snapshots.push({
       restorer,
       fixture,
+      args,
       data,
     });
 
